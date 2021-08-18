@@ -1,0 +1,22 @@
+trigger ContactDeleting on Contact (after delete) {
+    Map<String, Integer> accountIds = new Map<String, Integer>();
+    
+    for (Contact contactObj : Trigger.old) {
+        Integer val = accountIds.get(contactObj.AccountId);
+        if (val == null) {
+            accountIds.put(contactObj.AccountId, 1);
+        }
+        else {
+            accountIds.put(contactObj.AccountId, val+1);
+        }
+    }
+    
+    List<Account> accountsToUpdate = [SELECT Id,TotalContacts__c FROM Account 
+                                      WHERE Id IN :accountIds.keySet()];
+    
+    for (Account accountToUpdate : accountsToUpdate) {
+        accountToUpdate.TotalContacts__c -= accountIds.get(accountToUpdate.Id);
+    }
+    
+    update accountsToUpdate;
+}

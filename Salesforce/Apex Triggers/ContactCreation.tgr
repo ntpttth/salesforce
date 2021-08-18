@@ -1,0 +1,44 @@
+trigger ContactCreation on Contact (after insert) {
+    
+    Map<String, Integer> approvedAccountIds = new Map<String, Integer>();
+    List<String> activeContacts = new List<String>();
+    
+    for (Contact contactObj : Trigger.new) {
+        Approval.ProcessSubmitRequest approvalRequest = new Approval.ProcessSubmitRequest();
+        approvalRequest.setComments('Contact Submitted for approval');
+        approvalRequest.setObjectId(contactObj.Id);
+        approvalRequest.setProcessDefinitionNameOrId('Approve_Contact');
+        Approval.ProcessResult approvalResult = Approval.process(approvalRequest);
+        System.debug('Contact Submitted for approval successfully: '+ approvalResult.isSuccess());
+        
+        if (approvalResult.isSuccess()) {
+            activeContacts.add(contactObj.Id);
+            
+            Integer val = approvedAccountIds.get(contactObj.AccountId);
+            if (val == null) {
+                approvedAccountIds.put(contactObj.AccountId, 1);
+            }
+            else {
+                approvedAccountIds.put(contactObj.AccountId, val+1);
+            }
+        }
+    }
+    
+    List<Contact> contacts = [SELECT Id,Active__c FROM Contact 
+                                      WHERE Id IN :activeContacts];
+    
+    for (Contact contact : contacts) {
+        contact.Active__c = true;
+    }
+    
+    update contacts;
+    
+    List<Account> accountsToUpdate = [SELECT Id,TotalContacts__c FROM Account 
+                                      WHERE Id IN :approvedAccountIds.keySet()];
+    
+    for (Account accountToUpdate : accountsToUpdate) {
+        accountToUpdate.TotalContacts__c += approvedAccountIds.get(accountToUpdate.Id);
+    }
+    
+    update accountsToUpdate;
+}
